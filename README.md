@@ -31,3 +31,25 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## Getting starter data
+
+`scripts/download_data.sh` pulls the [Fruits Fresh and Rotten for
+Classification](https://www.kaggle.com/datasets/sriramr/fruits-fresh-and-rotten-for-classification)
+Kaggle dataset (apple/banana/orange, fresh vs rotten) and reorganizes it into
+the `data/raw/<food>_<fresh|rotten>/` layout above.
+
+1. Get a Kaggle API token: https://www.kaggle.com/settings -> "Create New Token",
+   save the downloaded `kaggle.json` to `~/.kaggle/kaggle.json`.
+2. Run:
+   ```
+   pip install kaggle
+   ./scripts/download_data.sh
+   ```
+
+This covers apple/banana/orange. For tomato, potato, and other vegetables,
+the [Fresh and Stale Images of Fruits and Vegetables](https://www.kaggle.com/datasets/raghavrpotdar/fresh-and-stale-images-of-fruits-and-vegetables)
+dataset is a good follow-up — download it similarly and map its class folders
+into `data/raw/<food>_<fresh|rotten>/` by hand (folder naming differs from the
+apple/banana/orange dataset). Bread and leafy greens currently need
+self-collected photos since there isn't a clean public dataset for them.
