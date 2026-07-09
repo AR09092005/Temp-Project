@@ -29,6 +29,12 @@
       "expo-router",
       "expo-camera",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "FreshScan can analyse photos from your library."
+        }
+      ],
+      [
         "react-native-fast-tflite",
         {
           "enableCoreMLDelegate": true,

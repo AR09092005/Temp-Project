@@ -4,16 +4,31 @@ import { loadTensorflowModel, TensorflowModel } from 'react-native-fast-tflite';
 import { Buffer } from 'buffer';
 import jpeg from 'jpeg-js';
 
-import { CLASS_NAMES, parsePrediction, Prediction } from './labels';
+import { parsePrediction, Prediction } from './labels';
+import { resolveModelUri } from './api';
 
-const MODEL_PATH = require('../assets/model/freshness_model.tflite');
+const BUNDLED_MODEL = require('../assets/model/freshness_model.tflite');
 const INPUT_SIZE = 224;
 
 let _model: TensorflowModel | null = null;
+// Single in-flight promise prevents concurrent loadModel() calls from
+// each spawning their own native model instance.
+let _loadPromise: Promise<void> | null = null;
 
 export async function loadModel(): Promise<void> {
   if (_model) return;
-  _model = await loadTensorflowModel(MODEL_PATH);
+  if (_loadPromise) return _loadPromise;
+
+  _loadPromise = (async () => {
+    const cachedUri = await resolveModelUri();
+    _model = cachedUri
+      ? await loadTensorflowModel({ url: cachedUri })
+      : await loadTensorflowModel(BUNDLED_MODEL);
+  })().finally(() => {
+    _loadPromise = null;
+  });
+
+  return _loadPromise;
 }
 
 // MobileNetV3 expects pixels normalised to [-1, 1].

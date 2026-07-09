@@ -6,12 +6,14 @@ import {
   ActivityIndicator,
   StyleSheet,
   Platform,
+  Alert,
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { classifyImage } from '@/lib/inference';
 
 export default function ScanScreen() {
@@ -20,34 +22,38 @@ export default function ScanScreen() {
   const [facing] = useState<CameraType>('back');
   const [analysing, setAnalysing] = useState(false);
 
-  const handleCapture = useCallback(async () => {
-    if (!cameraRef.current || analysing) return;
-
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setAnalysing(true);
-
-    try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
-      if (!photo) return;
-
-      const prediction = await classifyImage(photo.uri);
+  const navigate = useCallback(
+    (uri: string, food: string, state: string, label: string, confidence: number) => {
       router.push({
         pathname: '/result',
         params: {
-          imageUri: photo.uri,
-          label: prediction.label,
-          food: prediction.food,
-          state: prediction.state,
-          confidence: String(prediction.confidence),
+          imageUri: uri,
+          label,
+          food,
+          state,
+          confidence: String(confidence),
           capturedAt: new Date().toISOString(),
         },
       });
-    } catch (err) {
-      console.error('Classification failed:', err);
+    },
+    []
+  );
+
+  const handleCapture = useCallback(async () => {
+    if (!cameraRef.current || analysing) return;
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setAnalysing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
+      if (!photo) return;
+      const p = await classifyImage(photo.uri);
+      navigate(photo.uri, p.food, p.state, p.label, p.confidence);
+    } catch {
+      Alert.alert('Scan failed', 'Could not analyse the image. Please try again.');
     } finally {
       setAnalysing(false);
     }
-  }, [analysing]);
+  }, [analysing, navigate]);
 
   const handlePickImage = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -55,161 +61,266 @@ export default function ScanScreen() {
       quality: 0.85,
     });
     if (result.canceled || !result.assets[0]) return;
-
     const uri = result.assets[0].uri;
     setAnalysing(true);
     try {
-      const prediction = await classifyImage(uri);
-      router.push({
-        pathname: '/result',
-        params: {
-          imageUri: uri,
-          label: prediction.label,
-          food: prediction.food,
-          state: prediction.state,
-          confidence: String(prediction.confidence),
-          capturedAt: new Date().toISOString(),
-        },
-      });
-    } catch (err) {
-      console.error('Classification failed:', err);
+      const p = await classifyImage(uri);
+      navigate(uri, p.food, p.state, p.label, p.confidence);
+    } catch {
+      Alert.alert('Scan failed', 'Could not analyse the image. Please try again.');
     } finally {
       setAnalysing(false);
     }
-  }, []);
+  }, [navigate]);
 
-  if (!permission) return <View style={styles.container} />;
+  if (!permission) return <View style={styles.bg} />;
 
   if (!permission.granted) {
     return (
-      <View style={styles.permissionContainer}>
-        <Text style={styles.permissionTitle}>Camera access needed</Text>
-        <Text style={styles.permissionBody}>
-          FreshScan uses your camera to photograph food. Nothing is sent without your consent.
+      <SafeAreaView style={styles.permScreen}>
+        <StatusBar style="light" />
+        <View style={styles.permIcon}>
+          <Text style={styles.permIconText}>📷</Text>
+        </View>
+        <Text style={styles.permTitle}>Camera access needed</Text>
+        <Text style={styles.permBody}>
+          FreshScan photographs food items to check their freshness. Nothing leaves
+          your device without your consent.
         </Text>
-        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-          <Text style={styles.permissionButtonLabel}>Allow camera</Text>
+        <TouchableOpacity style={styles.permBtn} onPress={requestPermission}>
+          <Text style={styles.permBtnLabel}>Allow camera</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.bg}>
       <StatusBar style="light" />
-      <CameraView ref={cameraRef} style={styles.camera} facing={facing}>
-        {/* Viewfinder frame */}
-        <View style={styles.overlay}>
-          <View style={styles.frameContainer}>
-            <Text style={styles.hint}>Point at a fruit or vegetable</Text>
-            <View style={styles.frame}>
-              <View style={[styles.corner, styles.cornerTL]} />
-              <View style={[styles.corner, styles.cornerTR]} />
-              <View style={[styles.corner, styles.cornerBL]} />
-              <View style={[styles.corner, styles.cornerBR]} />
-            </View>
-          </View>
+      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={facing} />
 
-          <View style={styles.controls}>
-            <TouchableOpacity style={styles.galleryButton} onPress={handlePickImage}>
-              <Text style={styles.galleryLabel}>Gallery</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.shutterButton, analysing && styles.shutterDisabled]}
-              onPress={handleCapture}
-              disabled={analysing}
-            >
-              {analysing ? (
-                <ActivityIndicator color="#0F1A0F" />
-              ) : (
-                <View style={styles.shutterInner} />
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.galleryButton} />
-          </View>
+      {/* Top bar */}
+      <SafeAreaView edges={['top']} style={styles.topBar}>
+        <Text style={styles.wordmark}>FreshScan</Text>
+        <View style={styles.badge}>
+          <View style={styles.badgeDot} />
+          <Text style={styles.badgeLabel}>On-device AI</Text>
         </View>
-      </CameraView>
+      </SafeAreaView>
+
+      {/* Viewfinder */}
+      <View style={styles.viewfinder} pointerEvents="none">
+        <Text style={styles.hint}>
+          {analysing ? 'Analysing…' : 'Frame a fruit or vegetable'}
+        </Text>
+        <View style={styles.frame}>
+          {(['TL', 'TR', 'BL', 'BR'] as const).map((pos) => (
+            <View key={pos} style={[styles.corner, styles[`corner${pos}`]]} />
+          ))}
+          {analysing && (
+            <View style={styles.scanLine} />
+          )}
+        </View>
+      </View>
+
+      {/* Bottom controls */}
+      <SafeAreaView edges={['bottom']} style={styles.controls}>
+        <TouchableOpacity style={styles.sideBtn} onPress={handlePickImage} disabled={analysing}>
+          <Text style={styles.sideBtnIcon}>🖼</Text>
+          <Text style={styles.sideBtnLabel}>Gallery</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.shutter, analysing && styles.shutterBusy]}
+          onPress={handleCapture}
+          disabled={analysing}
+          activeOpacity={0.8}
+        >
+          {analysing ? (
+            <ActivityIndicator color="#0F1A0F" size="large" />
+          ) : (
+            <View style={styles.shutterRing}>
+              <View style={styles.shutterCore} />
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Balance spacer */}
+        <View style={styles.sideBtn} />
+      </SafeAreaView>
     </View>
   );
 }
 
-const CORNER = 24;
-const CORNER_BORDER = 3;
+const CORNER_SIZE = 28;
+const CORNER_W = 3;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F1A0F' },
-  camera: { flex: 1 },
+  bg: { flex: 1, backgroundColor: '#0A110A' },
 
-  permissionContainer: {
+  // Permission screen
+  permScreen: {
     flex: 1,
-    backgroundColor: '#0F1A0F',
+    backgroundColor: '#0A110A',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
+    paddingHorizontal: 36,
   },
-  permissionTitle: { color: '#E8F5E2', fontSize: 22, fontWeight: '600', marginBottom: 12 },
-  permissionBody: { color: '#8AAF84', fontSize: 15, textAlign: 'center', lineHeight: 22 },
-  permissionButton: {
-    marginTop: 32,
-    backgroundColor: '#4CAF50',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 12,
+  permIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: 'rgba(74,186,78,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
   },
-  permissionButtonLabel: { color: '#0F1A0F', fontSize: 16, fontWeight: '700' },
+  permIconText: { fontSize: 36 },
+  permTitle: {
+    color: '#E8F5E2',
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  permBody: {
+    color: '#7A9E76',
+    fontSize: 15,
+    lineHeight: 23,
+    textAlign: 'center',
+  },
+  permBtn: {
+    marginTop: 36,
+    backgroundColor: '#4ABA4E',
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    borderRadius: 14,
+  },
+  permBtnLabel: { color: '#0A110A', fontSize: 16, fontWeight: '700' },
 
-  overlay: { flex: 1, justifyContent: 'space-between' },
-  frameContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  // Top bar
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  wordmark: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  badgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4ABA4E',
+  },
+  badgeLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '500' },
+
+  // Viewfinder
+  viewfinder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+  },
   hint: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.85)',
     fontSize: 14,
-    marginBottom: 16,
-    letterSpacing: 0.3,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   frame: {
-    width: 260,
-    height: 260,
+    width: 256,
+    height: 256,
     position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   corner: {
     position: 'absolute',
-    width: CORNER,
-    height: CORNER,
-    borderColor: '#4CAF50',
+    width: CORNER_SIZE,
+    height: CORNER_SIZE,
+    borderColor: '#4ABA4E',
   },
-  cornerTL: { top: 0, left: 0, borderTopWidth: CORNER_BORDER, borderLeftWidth: CORNER_BORDER },
-  cornerTR: { top: 0, right: 0, borderTopWidth: CORNER_BORDER, borderRightWidth: CORNER_BORDER },
-  cornerBL: { bottom: 0, left: 0, borderBottomWidth: CORNER_BORDER, borderLeftWidth: CORNER_BORDER },
-  cornerBR: { bottom: 0, right: 0, borderBottomWidth: CORNER_BORDER, borderRightWidth: CORNER_BORDER },
+  cornerTL: { top: 0, left: 0, borderTopWidth: CORNER_W, borderLeftWidth: CORNER_W, borderTopLeftRadius: 4 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: CORNER_W, borderRightWidth: CORNER_W, borderTopRightRadius: 4 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: CORNER_W, borderLeftWidth: CORNER_W, borderBottomLeftRadius: 4 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: CORNER_W, borderRightWidth: CORNER_W, borderBottomRightRadius: 4 },
+  scanLine: {
+    position: 'absolute',
+    width: '100%',
+    height: 2,
+    backgroundColor: 'rgba(74,186,78,0.6)',
+    top: '50%',
+  },
 
+  // Controls
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 40,
-    paddingBottom: Platform.OS === 'ios' ? 48 : 32,
-    paddingTop: 16,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 36,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 20,
+    backgroundColor: 'rgba(10,17,10,0.7)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
-  galleryButton: { width: 56, alignItems: 'center' },
-  galleryLabel: { color: '#fff', fontSize: 13 },
-  shutterButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  sideBtn: {
+    width: 56,
+    alignItems: 'center',
+    gap: 4,
+  },
+  sideBtnIcon: { fontSize: 22 },
+  sideBtnLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
+
+  shutter: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.5)',
+    shadowColor: '#4ABA4E',
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 10,
   },
-  shutterDisabled: { opacity: 0.5 },
-  shutterInner: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+  shutterBusy: { backgroundColor: 'rgba(255,255,255,0.85)' },
+  shutterRing: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 3,
+    borderColor: 'rgba(0,0,0,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shutterCore: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: '#fff',
   },
 });
