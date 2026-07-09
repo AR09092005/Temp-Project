@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "FreshScan",
+    "slug": "freshscan",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "freshscan",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0F1A0F"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.freshscan.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "FreshScan uses your camera to photograph food items for freshness detection.",
+        "NSPhotoLibraryUsageDescription": "FreshScan can analyse photos from your library."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0F1A0F"
+      },
+      "package": "com.freshscan.app",
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-camera",
+      [
+        "react-native-fast-tflite",
+        {
+          "enableCoreMLDelegate": true,
+          "enableAndroidGpuDelegate": true
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

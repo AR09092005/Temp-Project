@@ -21,6 +21,16 @@ A mobile-ready image classifier that distinguishes fresh from spoiled grocery it
 ├── data/
 │   ├── raw/            # Training images: <food>_<fresh|rotten>/*.jpg
 │   └── processed/      # Reserved for any derived features
+├── mobile/             # Expo (React Native) app
+│   ├── app/
+│   │   ├── _layout.tsx             # Root layout, loads TFLite model on startup
+│   │   ├── index.tsx               # Camera scan screen
+│   │   └── result.tsx              # Prediction result + feedback screen
+│   ├── lib/
+│   │   ├── inference.ts            # Image → tensor → TFLite → Prediction
+│   │   ├── api.ts                  # Feedback upload + OTA model update
+│   │   └── labels.ts               # Class name list and prediction parser
+│   └── assets/model/               # Place freshness_model.tflite here after export
 ├── models/             # Trained SavedModel and exported .tflite file
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb   # Class balance, sample previews
@@ -135,9 +145,32 @@ Python 3.10+ recommended.
 
 ---
 
+## Running the mobile app
+
+```bash
+cd mobile
+npm install
+
+# Start in Expo Go (limited — TFLite requires a custom dev client)
+npx expo start
+
+# Build a custom dev client (one-time, needed for on-device TFLite)
+npx eas build --profile development --platform ios   # or android
+
+# After building, copy the exported model:
+cp ../models/freshness_model.tflite assets/model/
+```
+
+Set `EXPO_PUBLIC_API_URL` in a `.env` file in `mobile/` to point at your
+feedback backend. Omitting it defaults to `http://localhost:8000`.
+
+---
+
 ## Roadmap
 
-- [ ] Mobile app shell (React Native) with camera capture and on-device inference
+- [x] Training notebooks (data exploration, fine-tuning, TFLite export)
+- [x] Data download + reorganize scripts
+- [x] Mobile app: camera screen, on-device inference, feedback UI
 - [ ] Backend API for label collection and model versioning
 - [ ] OTA model update endpoint
 - [ ] Automated retraining pipeline (trigger on N new confirmed labels)
